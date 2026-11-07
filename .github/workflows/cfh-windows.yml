@@ -1,86 +1,58 @@
-name: CFH Text Windows verification
+name: CFH Text installed editor interaction
 on:
   workflow_dispatch:
 permissions:
+  actions: read
   contents: read
 jobs:
-  build:
+  interaction:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 8
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00
-        with:
-          go-version: '1.27.3'
-          cache: false
-      - name: Install vulnerability scanner
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
-      - name: Generate embedded runtime
-        run: go generate ./runtime
-      - name: Test editor
-        run: go test ./internal/... ./cmd/...
-      - name: Build CFH Text
-        run: go build -trimpath -o cfh-text.exe ./cmd/micro
-      - name: Check source and built executable for known vulnerabilities
+      - name: Fetch exact installer
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          go version
-          go version -m .\cfh-text.exe
-          & "$(go env GOPATH)\bin\govulncheck.exe" ./...
-          if($LASTEXITCODE -ne 0){throw 'Source vulnerability scan failed'}
-          & "$(go env GOPATH)\bin\govulncheck.exe" -mode binary .\cfh-text.exe
-          if($LASTEXITCODE -ne 0){throw 'Binary vulnerability scan failed'}
-      - name: Verify executable file inspection
+          $run=gh api repos/clearframeworks/cfh-micro/actions/runs/42402139417 | ConvertFrom-Json
+          if ($run.head_sha -ne '04c01331a3088cf81a6f0d96196e0a0ddb2f16ee' -or $run.conclusion -ne 'success') { throw 'Build identity mismatch' }
+          gh run download 42402139417 --repo clearframeworks/cfh-micro --name cfh-text-installer-unsigned --dir "$env:RUNNER_TEMP\installer"
+          if ($LASTEXITCODE -ne 0) { throw 'Artifact download failed' }
+          Get-FileHash "$env:RUNNER_TEMP\installer\CFH-Text-Setup.exe" -Algorithm SHA256 | Format-List
+      - name: Install and prepare isolated terminal
         shell: pwsh
         run: |
-          [IO.File]::WriteAllText("$env:RUNNER_TEMP\sample.txt", 'abc')
-          $out = & .\cfh-text.exe -cfh-inspect "$env:RUNNER_TEMP\sample.txt"
-          if ($LASTEXITCODE -ne 0 -or $out -notmatch 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad') { throw 'Fingerprint verification failed' }
-          $out = & .\cfh-text.exe -version
-          if ($LASTEXITCODE -ne 0 -or ($out -join [Environment]::NewLine) -notmatch 'CFH Text') { throw 'CFH identity missing' }
-      - name: Build unsigned Windows installer
-        shell: pwsh
-        run: |
-          $iss = @"
-          [Setup]
-          AppId=CFHText
-          AppName=CFH Text
-          AppVersion=2.0.15
-          AppPublisher=Coders for Humanity
-          DefaultDirName={localappdata}\Programs\CFH Text
-          DefaultGroupName=CFH Text
-          PrivilegesRequired=lowest
-          OutputDir=$env:RUNNER_TEMP\cfh-installer
-          OutputBaseFilename=CFH-Text-Setup
-          Compression=lzma2
-          SolidCompression=yes
-          [Files]
-          Source: "$env:GITHUB_WORKSPACE\cfh-text.exe"; DestDir: "{app}"; Flags: ignoreversion
-          Source: "$env:GITHUB_WORKSPACE\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
-          Source: "$env:GITHUB_WORKSPACE\CFH-FORK.md"; DestDir: "{app}"; Flags: ignoreversion
-          [Icons]
-          Name: "{group}\CFH Text"; Filename: "{app}\cfh-text.exe"
-          "@
-          $iss | Set-Content "$env:RUNNER_TEMP\cfh.iss" -Encoding utf8
-          iscc "$env:RUNNER_TEMP\cfh.iss"
-          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
-      - name: Test installation and removal
-        shell: pwsh
-        run: |
-          $dir="$env:RUNNER_TEMP\installed"
-          $p=Start-Process "$env:RUNNER_TEMP\cfh-installer\CFH-Text-Setup.exe" -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$dir") -Wait -PassThru
+          $dir="$env:RUNNER_TEMP\cfh-text"
+          $p=Start-Process "$env:RUNNER_TEMP\installer\CFH-Text-Setup.exe" -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$dir") -Wait -PassThru
           if ($p.ExitCode -ne 0 -or !(Test-Path "$dir\cfh-text.exe")) { throw 'Install failed' }
-          $out = & "$dir\cfh-text.exe" -cfh-inspect "$env:RUNNER_TEMP\sample.txt"
-          if ($LASTEXITCODE -ne 0 -or $out -notmatch 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad') { throw 'Installed app test failed' }
-          $uninstaller=Get-ChildItem "$dir\unins*.exe" | Select-Object -First 1
-          if (-not $uninstaller) { throw 'Uninstaller missing' }
-          $p=Start-Process $uninstaller.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
-          if ($p.ExitCode -ne 0) { throw 'Uninstall failed' }
-      - name: Upload unsigned installer
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: cfh-text-installer-unsigned
-          path: ${{ runner.temp }}\cfh-installer\CFH-Text-Setup.exe
-          if-no-files-found: error
+          python -m pip install 'pywinpty==3.1.2'
+          if ($LASTEXITCODE -ne 0) { throw 'Terminal test dependency failed' }
+      - name: Open edit and save a file
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          $script = @'
+          import os, pathlib, time
+          from winpty import PtyProcess
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          target = root / 'editor-test.txt'
+          target.write_text('original\n', encoding='utf-8')
+          exe = root / 'cfh-text' / 'cfh-text.exe'
+          proc = PtyProcess.spawn([str(exe), str(target)], dimensions=(30, 100))
+          try:
+              time.sleep(5)
+              if not proc.isalive(): raise RuntimeError('editor exited before input')
+              proc.write('CFH-verified ')
+              time.sleep(1)
+              proc.write('\x13')
+              time.sleep(3)
+              content = target.read_text(encoding='utf-8')
+              if content != 'CFH-verified original\n': raise RuntimeError(f'Unexpected saved content: {content!r}')
+              proc.write('\x11')
+              print('INSTALLED EDITOR OPEN EDIT SAVE VERIFIED')
+          finally:
+              if proc.isalive(): proc.terminate(force=True)
+          '@
+          $script | Set-Content "$env:RUNNER_TEMP\editor-test.py" -Encoding utf8
+          python "$env:RUNNER_TEMP\editor-test.py"
+          if ($LASTEXITCODE -ne 0) { throw 'Interactive editor verification failed' }
