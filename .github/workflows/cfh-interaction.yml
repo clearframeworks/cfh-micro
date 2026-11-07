@@ -1,0 +1,58 @@
+name: CFH Text installed editor interaction
+on:
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  interaction:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - name: Fetch exact installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $run=gh api repos/clearframeworks/cfh-micro/actions/runs/42380652179 | ConvertFrom-Json
+          if ($run.head_sha -ne '5c4e7836cf1430532fc0ebe99f0280abe881b6c8' -or $run.conclusion -ne 'success') { throw 'Build identity mismatch' }
+          gh run download 42380652179 --repo clearframeworks/cfh-micro --name cfh-text-installer-unsigned --dir "$env:RUNNER_TEMP\installer"
+          if ($LASTEXITCODE -ne 0) { throw 'Artifact download failed' }
+          Get-FileHash "$env:RUNNER_TEMP\installer\CFH-Text-Setup.exe" -Algorithm SHA256 | Format-List
+      - name: Install and prepare isolated terminal
+        shell: pwsh
+        run: |
+          $dir="$env:RUNNER_TEMP\cfh-text"
+          $p=Start-Process "$env:RUNNER_TEMP\installer\CFH-Text-Setup.exe" -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$dir") -Wait -PassThru
+          if ($p.ExitCode -ne 0 -or !(Test-Path "$dir\cfh-text.exe")) { throw 'Install failed' }
+          python -m pip install 'pywinpty==3.1.2'
+          if ($LASTEXITCODE -ne 0) { throw 'Terminal test dependency failed' }
+      - name: Open edit and save a file
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          $script = @'
+          import os, pathlib, time
+          from winpty import PtyProcess
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          target = root / 'editor-test.txt'
+          target.write_text('original', encoding='utf-8')
+          exe = root / 'cfh-text' / 'cfh-text.exe'
+          proc = PtyProcess.spawn([str(exe), str(target)], dimensions=(30, 100))
+          try:
+              time.sleep(5)
+              if not proc.isalive(): raise RuntimeError('editor exited before input')
+              proc.write('CFH-verified ')
+              time.sleep(1)
+              proc.write('\x13')
+              time.sleep(3)
+              content = target.read_text(encoding='utf-8')
+              if content != 'CFH-verified original': raise RuntimeError(f'Unexpected saved content: {content!r}')
+              proc.write('\x11')
+              print('INSTALLED EDITOR OPEN EDIT SAVE VERIFIED')
+          finally:
+              if proc.isalive(): proc.terminate(force=True)
+          '@
+          $script | Set-Content "$env:RUNNER_TEMP\editor-test.py" -Encoding utf8
+          python "$env:RUNNER_TEMP\editor-test.py"
+          if ($LASTEXITCODE -ne 0) { throw 'Interactive editor verification failed' }
