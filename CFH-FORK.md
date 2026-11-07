@@ -6,4 +6,4 @@ Upstream: https://github.com/micro-editor/micro
 Base: Micro v2.0.15, commit 6a62575bcfdf4965f187eedafceb3400316e612b
 License: MIT. Retain the original LICENSE and upstream copyright notices. Micro is developed by its contributors; CFH Text is an independent fork.
 
-This candidate is under test. Do not treat it as a published installer until the exact build and its release checks are complete.
+For current release status, installer checksums, and security limitations, consult the CFH Text release notes.
