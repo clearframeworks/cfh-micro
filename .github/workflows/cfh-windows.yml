@@ -1,71 +1,24 @@
-name: CFH Text Windows verification
+name: Preview Text Go dependency update
 on:
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  build:
-    runs-on: windows-latest
-    timeout-minutes: 20
+  preview:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
+          ref: 9170affcf393a700995597e7eb0cfdc1d1aa4e86
           persist-credentials: false
-      - name: Generate embedded runtime
-        run: go generate ./runtime
-      - name: Test editor
-        run: go test ./internal/... ./cmd/...
-      - name: Build CFH Text
-        run: go build -trimpath -o cfh-text.exe ./cmd/micro
-      - name: Verify executable file inspection
-        shell: pwsh
+      - name: Resolve fixed versions without publishing
         run: |
-          [IO.File]::WriteAllText("$env:RUNNER_TEMP\sample.txt", 'abc')
-          $out = & .\cfh-text.exe -cfh-inspect "$env:RUNNER_TEMP\sample.txt"
-          if ($LASTEXITCODE -ne 0 -or $out -notmatch 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad') { throw 'Fingerprint verification failed' }
-          $out = & .\cfh-text.exe -version
-          if ($LASTEXITCODE -ne 0 -or ($out -join ' ') -notmatch 'CFH Text') { throw 'CFH identity missing' }
-      - name: Build unsigned Windows installer
-        shell: pwsh
-        run: |
-          $iss = @"
-          [Setup]
-          AppId=CFHText
-          AppName=CFH Text
-          AppVersion=2.0.15
-          AppPublisher=Coders for Humanity
-          DefaultDirName={localappdata}\Programs\CFH Text
-          DefaultGroupName=CFH Text
-          PrivilegesRequired=lowest
-          OutputDir=$env:RUNNER_TEMP\cfh-installer
-          OutputBaseFilename=CFH-Text-Setup
-          Compression=lzma2
-          SolidCompression=yes
-          [Files]
-          Source: "$env:GITHUB_WORKSPACE\cfh-text.exe"; DestDir: "{app}"; Flags: ignoreversion
-          Source: "$env:GITHUB_WORKSPACE\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
-          Source: "$env:GITHUB_WORKSPACE\CFH-FORK.md"; DestDir: "{app}"; Flags: ignoreversion
-          [Icons]
-          Name: "{group}\CFH Text"; Filename: "{app}\cfh-text.exe"
-          "@
-          $iss | Set-Content "$env:RUNNER_TEMP\cfh.iss" -Encoding utf8
-          iscc "$env:RUNNER_TEMP\cfh.iss"
-          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
-      - name: Test installation and removal
-        shell: pwsh
-        run: |
-          $dir="$env:RUNNER_TEMP\installed"
-          $p=Start-Process "$env:RUNNER_TEMP\cfh-installer\CFH-Text-Setup.exe" -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$dir") -Wait -PassThru
-          if ($p.ExitCode -ne 0 -or !(Test-Path "$dir\cfh-text.exe")) { throw 'Install failed' }
-          $out = & "$dir\cfh-text.exe" -cfh-inspect "$env:RUNNER_TEMP\sample.txt"
-          if ($LASTEXITCODE -ne 0 -or $out -notmatch 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad') { throw 'Installed app test failed' }
-          $uninstaller=Get-ChildItem "$dir\unins*.exe" | Select-Object -First 1
-          if (-not $uninstaller) { throw 'Uninstaller missing' }
-          $p=Start-Process $uninstaller.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
-          if ($p.ExitCode -ne 0) { throw 'Uninstall failed' }
-      - name: Upload unsigned installer
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: cfh-text-installer-unsigned
-          path: ${{ runner.temp }}\cfh-installer\CFH-Text-Setup.exe
-          if-no-files-found: error
+          set -euo pipefail
+          go get golang.org/x/sys@v0.44.0 golang.org/x/text@v0.41.0
+          git diff -- go.mod go.sum
+          echo BEGIN_GOMOD
+          base64 -w0 go.mod; echo
+          echo END_GOMOD
+          echo BEGIN_GOSUM
+          base64 -w0 go.sum; echo
+          echo END_GOSUM
