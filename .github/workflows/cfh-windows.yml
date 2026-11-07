@@ -39,7 +39,7 @@ jobs:
           $out = & .\cfh-text.exe -cfh-inspect "$env:RUNNER_TEMP\sample.txt"
           if ($LASTEXITCODE -ne 0 -or $out -notmatch 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad') { throw 'Fingerprint verification failed' }
           $out = & .\cfh-text.exe -version
-          if ($LASTEXITCODE -ne 0 -or $out -notmatch 'CFH Text') { throw 'CFH identity missing' }
+          if ($LASTEXITCODE -ne 0 -or ($out -join [Environment]::NewLine) -notmatch 'CFH Text') { throw 'CFH identity missing' }
       - name: Build unsigned Windows installer
         shell: pwsh
         run: |
