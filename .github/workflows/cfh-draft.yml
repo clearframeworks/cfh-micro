@@ -19,14 +19,4 @@ jobs:
           gh run download 42402139417 --repo clearframeworks/cfh-micro --name cfh-text-installer-unsigned --dir "$RUNNER_TEMP/installer"
           file="$RUNNER_TEMP/installer/CFH-Text-Setup.exe"
           echo 'fcef52df24a8eff30b8494b170ec5eb3f802fd806cc93693976260524c9a38e0  '"$file" | sha256sum -c -
-          if gh release view cfh-text-0.1.1 --repo clearframeworks/cfh-micro >/dev/null 2>&1; then echo 'Release already exists; refusing to replace'; exit 1; fi
-          cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
-          CFH Text is a free Windows terminal text editor based on Micro v2.0.15. It adds `-cfh-inspect FILE...` to print a file's SHA-256 fingerprint and size. A fingerprint is not a malware scan.
-
-          **Windows installer:** `CFH-Text-Setup.exe` is unsigned. Windows may show a publisher warning. SHA-256: `fcef52df24a8eff30b8494b170ec5eb3f802fd806cc93693976260524c9a38e0`.
-
-          This release is an independent CFH fork of [Micro](https://github.com/micro-editor/micro), base commit `6a62575bcfdf4965f187eedafceb3400316e612b`. Micro and its contributors retain their copyright. The MIT license and fork notice are included in the installer. [Source for this release](https://github.com/clearframeworks/cfh-micro/tree/04c01331a3088cf81a6f0d96196e0a0ddb2f16ee).
-
-          This update rebuilds with Go 1.27.3 and updates Go libraries to address the advisories identified in 0.1.0. Source and binary govulncheck found no vulnerabilities in this candidate at the time of testing. The installed editor was tested opening, editing and saving a harmless file on an isolated Windows runner. Scans and tests do not guarantee security.
-          NOTES
-          gh release create cfh-text-0.1.1 "$file" --repo clearframeworks/cfh-micro --target 04c01331a3088cf81a6f0d96196e0a0ddb2f16ee --title 'CFH Text 0.1.1' --notes-file "$RUNNER_TEMP/notes.md" --draft
+          gh release upload cfh-text-0.1.1 "$file" --repo clearframeworks/cfh-micro
