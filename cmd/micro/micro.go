@@ -32,6 +32,7 @@ import (
 var (
 	// Command line flags
 	flagVersion   = flag.Bool("version", false, "Show the version number and information")
+	flagInspect = flag.Bool("cfh-inspect", false, "Print file SHA-256 and size without opening the editor")
 	flagConfigDir = flag.String("config-dir", "", "Specify a custom location for the configuration directory")
 	flagOptions   = flag.Bool("options", false, "Show all option help")
 	flagDebug     = flag.Bool("debug", false, "Enable debug mode (prints debug info to ./log.txt)")
@@ -66,6 +67,8 @@ func InitFlags() {
 		fmt.Println("-profile")
 		fmt.Println("    \tEnable CPU profiling (writes profile info to ./micro.prof")
 		fmt.Println("    \tso it can be analyzed later with \"go tool pprof micro.prof\")")
+		fmt.Println("-cfh-inspect FILE...")
+		fmt.Println("    \tPrint SHA-256 and size; this does not scan for malware")
 		fmt.Println("-version")
 		fmt.Println("    \tShow the version number and information and exit")
 
@@ -98,8 +101,23 @@ func InitFlags() {
 
 	flag.Parse()
 
+	if *flagInspect {
+		if flag.NArg() == 0 {
+			fmt.Fprintln(os.Stderr, "Provide at least one file to inspect.")
+			exit(1)
+		}
+		failed := false
+		for _, path := range flag.Args() {
+			hash, size, err := cfhInspect(path)
+			if err != nil { fmt.Fprintf(os.Stderr, "%s: %v\n", path, err); failed = true; continue }
+			fmt.Printf("%s  %d bytes  %s\n", hash, size, path)
+		}
+		if failed { exit(1) }
+		exit(0)
+	}
 	if *flagVersion {
 		// If -version was passed
+		fmt.Println("CFH Text — based on Micro")
 		fmt.Println("Version:", util.Version)
 		fmt.Println("Commit hash:", util.CommitHash)
 		fmt.Println("Compiled on", util.CompileDate)
