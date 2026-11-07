@@ -1,0 +1,14 @@
+name: Verify public CFH Text release
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download published installer without credentials
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/CFH-Text-Setup.exe" 'https://github.com/clearframeworks/cfh-micro/releases/download/cfh-text-0.1.0/CFH-Text-Setup.exe'
+          echo 'a168969e3a134d27e62d2a35a8ff1228c1b6b000c2ba34104928e71be2a0fc39  '"$RUNNER_TEMP/CFH-Text-Setup.exe" | sha256sum -c -
