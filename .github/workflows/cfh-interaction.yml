@@ -36,7 +36,7 @@ jobs:
           from winpty import PtyProcess
           root = pathlib.Path(os.environ['RUNNER_TEMP'])
           target = root / 'editor-test.txt'
-          target.write_text('original', encoding='utf-8')
+          target.write_text('original\n', encoding='utf-8')
           exe = root / 'cfh-text' / 'cfh-text.exe'
           proc = PtyProcess.spawn([str(exe), str(target)], dimensions=(30, 100))
           try:
@@ -47,7 +47,7 @@ jobs:
               proc.write('\x13')
               time.sleep(3)
               content = target.read_text(encoding='utf-8')
-              if content != 'CFH-verified original': raise RuntimeError(f'Unexpected saved content: {content!r}')
+              if content != 'CFH-verified original\n': raise RuntimeError(f'Unexpected saved content: {content!r}')
               proc.write('\x11')
               print('INSTALLED EDITOR OPEN EDIT SAVE VERIFIED')
           finally:
