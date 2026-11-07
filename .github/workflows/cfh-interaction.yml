@@ -14,9 +14,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $run=gh api repos/clearframeworks/cfh-micro/actions/runs/42380652179 | ConvertFrom-Json
-          if ($run.head_sha -ne '5c4e7836cf1430532fc0ebe99f0280abe881b6c8' -or $run.conclusion -ne 'success') { throw 'Build identity mismatch' }
-          gh run download 42380652179 --repo clearframeworks/cfh-micro --name cfh-text-installer-unsigned --dir "$env:RUNNER_TEMP\installer"
+          $run=gh api repos/clearframeworks/cfh-micro/actions/runs/42381340602 | ConvertFrom-Json
+          if ($run.head_sha -ne '9170affcf393a700995597e7eb0cfdc1d1aa4e86' -or $run.conclusion -ne 'success') { throw 'Build identity mismatch' }
+          gh run download 42381340602 --repo clearframeworks/cfh-micro --name cfh-text-installer-unsigned --dir "$env:RUNNER_TEMP\installer"
           if ($LASTEXITCODE -ne 0) { throw 'Artifact download failed' }
           Get-FileHash "$env:RUNNER_TEMP\installer\CFH-Text-Setup.exe" -Algorithm SHA256 | Format-List
       - name: Install and prepare isolated terminal
