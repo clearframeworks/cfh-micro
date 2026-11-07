@@ -1,0 +1,19 @@
+name: CFH Micro candidate audit
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 6a62575bcfdf4965f187eedafceb3400316e612b
+          persist-credentials: false
+      - name: Install OSV Scanner
+        run: go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.7.0
+      - name: Audit release dependencies
+        run: |
+          "$(go env GOPATH)/bin/osv-scanner" scan source --recursive .
