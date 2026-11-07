@@ -1,0 +1,26 @@
+name: Update CFH Text draft with corrected candidate
+on:
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Update the existing draft only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run=$(gh api repos/clearframeworks/cfh-micro/actions/runs/42381340602 --jq '.head_sha + " " + .conclusion')
+          test "$run" = '9170affcf393a700995597e7eb0cfdc1d1aa4e86 success'
+          draft=$(gh release view cfh-text-0.1.0 --repo clearframeworks/cfh-micro --json isDraft --jq .isDraft)
+          test "$draft" = true || { echo 'Release is not a draft'; exit 1; }
+          gh run download 42381340602 --repo clearframeworks/cfh-micro --name cfh-text-installer-unsigned --dir "$RUNNER_TEMP/installer"
+          file="$RUNNER_TEMP/installer/CFH-Text-Setup.exe"
+          echo 'a168969e3a134d27e62d2a35a8ff1228c1b6b000c2ba34104928e71be2a0fc39  '"$file" | sha256sum -c -
+          gh release view cfh-text-0.1.0 --repo clearframeworks/cfh-micro --json body --jq .body | sed -e 's/254f29c658d793d902220fed2958afc5d694732f80040505f7497b0f30443670/a168969e3a134d27e62d2a35a8ff1228c1b6b000c2ba34104928e71be2a0fc39/g' -e 's/5c4e7836cf1430532fc0ebe99f0280abe881b6c8/9170affcf393a700995597e7eb0cfdc1d1aa4e86/g' > "$RUNNER_TEMP/notes.md"
+          gh release upload cfh-text-0.1.0 "$file" --repo clearframeworks/cfh-micro --clobber
+          gh release edit cfh-text-0.1.0 --repo clearframeworks/cfh-micro --target 9170affcf393a700995597e7eb0cfdc1d1aa4e86 --notes-file "$RUNNER_TEMP/notes.md"
